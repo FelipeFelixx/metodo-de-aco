@@ -1,67 +1,2353 @@
-import {useEffect,useMemo,useState} from 'react';
-import type {Dispatch, SetStateAction} from 'react';
-import {BarChart3,BookOpen,Check,CheckCircle2,ChevronRight,Clock3,Copy,Flame,LayoutDashboard,LockKeyhole,LogIn,LogOut,Menu,Plus,RefreshCw,ShieldCheck,Sparkles,Target,Trash2,Users,X,Zap} from 'lucide-react';
-import {checkoutUrl,supabase} from './lib/supabase';
+import { useEffect, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
+import {
+  BarChart3,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  Copy,
+  Flame,
+  LayoutDashboard,
+  LockKeyhole,
+  LogIn,
+  LogOut,
+  Menu,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Trash2,
+  Users,
+  X,
+  Zap,
+} from 'lucide-react';
 
-type View='dashboard'|'lessons'|'challenges'|'timer'|'planner'|'prompts'|'progress'|'admin';
-type Product={id:string;name:string;description:string};
-type Lesson={id:string;title:string;subtitle:string|null;duration_minutes:number;content:string[];position:number};
-type Challenge={id:string;slug:string;name:string;description:string|null;config:{items?:string[];days?:number}};
-type Prompt={id:string;title:string;text:string;position:number};
-type Profile={id:string;name:string|null;email:string|null};
-type Block={id:string;starts_at:string;ends_at:string|null;title:string;notes:string|null};
-type Entitlement={id:string;status:string;product_id:string};
+import {
+  checkoutUrl,
+  isSupabaseConfigured,
+  supabase,
+} from './lib/supabase';
 
-const nav:[View,string,typeof LayoutDashboard][]=[['dashboard','Dashboard',LayoutDashboard],['lessons','Método Foco de Aço',BookOpen],['challenges','Desafios',Target],['timer','Pomodoro',Clock3],['planner','Planner',Clock3],['prompts','30 Prompts',Sparkles],['progress','Meu Progresso',BarChart3]];
+type View =
+  | 'dashboard'
+  | 'lessons'
+  | 'challenges'
+  | 'timer'
+  | 'planner'
+  | 'prompts'
+  | 'progress'
+  | 'admin';
 
-export default function App(){
- const [session,setSession]=useState<any>(null); const [profile,setProfile]=useState<Profile|null>(null); const [role,setRole]=useState<'student'|'admin'>('student');
- const [product,setProduct]=useState<Product|null>(null); const [entitlement,setEntitlement]=useState<Entitlement|null>(null); const [lessons,setLessons]=useState<Lesson[]>([]); const [challenges,setChallenges]=useState<Challenge[]>([]); const [prompts,setPrompts]=useState<Prompt[]>([]); const [progress,setProgress]=useState<string[]>([]); const [challengeState,setChallengeState]=useState<Record<string,any>>({}); const [blocks,setBlocks]=useState<Block[]>([]);
- const [view,setView]=useState<View>('dashboard'); const [loading,setLoading]=useState(true); const [error,setError]=useState(''); const [menu,setMenu]=useState(false); const [copied,setCopied]=useState<string|null>(null);
- const refresh=async()=>{if(!supabase)return; setLoading(true);setError(''); const {data:{session:s}}=await supabase.auth.getSession();setSession(s); if(!s){setLoading(false);return}
-  const uid=s.user.id; const [p,r,prod,e]=await Promise.all([supabase.from('profiles').select('id,name,email').eq('id',uid).maybeSingle(),supabase.from('user_roles').select('role').eq('user_id',uid).maybeSingle(),supabase.from('products').select('id,name,description').eq('slug','metodo-foco-de-aco').maybeSingle(),supabase.from('entitlements').select('id,status,product_id').eq('user_id',uid).eq('status','active').limit(1).maybeSingle()]);
-  if(p.error||r.error||prod.error){setError(p.error?.message||r.error?.message||prod.error?.message||'Falha ao carregar conta.');setLoading(false);return}
-  setProfile(p.data); setRole((r.data?.role as 'student'|'admin')||'student'); setProduct(prod.data); setEntitlement(e.data);
-  if(prod.data&&(e.data||r.data?.role==='admin')){const [ls,ch,pr,lp,cp,bl]=await Promise.all([supabase.from('lessons').select('id,title,subtitle,duration_minutes,content,position').eq('product_id',prod.data.id).order('position'),supabase.from('challenges').select('id,slug,name,description,config').eq('product_id',prod.data.id),supabase.from('prompts').select('id,title,text,position').eq('product_id',prod.data.id).order('position'),supabase.from('lesson_progress').select('lesson_id').eq('user_id',uid),supabase.from('challenge_progress').select('challenge_id,state').eq('user_id',uid),supabase.from('planner_blocks').select('id,starts_at,ends_at,title,notes').eq('user_id',uid).order('starts_at')]);
-   if(ls.error||ch.error||pr.error||lp.error||cp.error||bl.error)setError('Alguns dados não puderam ser carregados.'); else {setLessons((ls.data||[]) as Lesson[]);setChallenges((ch.data||[]) as Challenge[]);setPrompts((pr.data||[]) as Prompt[]);setProgress((lp.data||[]).map((x:any)=>x.lesson_id));const cs:any={};(cp.data||[]).forEach((x:any)=>cs[x.challenge_id]=x.state);setChallengeState(cs);setBlocks((bl.data||[]) as Block[])}
+type Product = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+type Lesson = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  duration_minutes: number;
+  content: string[];
+  position: number;
+};
+
+type Challenge = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  config: {
+    items?: string[];
+    days?: number;
+  };
+};
+
+type Prompt = {
+  id: string;
+  title: string;
+  text: string;
+  position: number;
+};
+
+type Profile = {
+  id: string;
+  name: string | null;
+  email: string | null;
+};
+
+type Block = {
+  id: string;
+  starts_at: string;
+  ends_at: string | null;
+  title: string;
+  notes: string | null;
+};
+
+type Entitlement = {
+  id: string;
+  status: string;
+  product_id: string;
+};
+
+type AdminRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  created_at: string;
+  entitlement: {
+    id: string;
+    status: string;
+    provider: string;
+    external_transaction_id: string | null;
+  } | null;
+};
+
+const nav: [View, string, typeof LayoutDashboard][] = [
+  ['dashboard', 'Dashboard', LayoutDashboard],
+  ['lessons', 'Método Foco de Aço', BookOpen],
+  ['challenges', 'Desafios', Target],
+  ['timer', 'Pomodoro', Clock3],
+  ['planner', 'Planner', Clock3],
+  ['prompts', '30 Prompts', Sparkles],
+  ['progress', 'Meu Progresso', BarChart3],
+];
+
+export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [role, setRole] = useState<'student' | 'admin'>('student');
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [entitlement, setEntitlement] =
+    useState<Entitlement | null>(null);
+
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [progress, setProgress] = useState<string[]>([]);
+  const [challengeState, setChallengeState] =
+    useState<Record<string, any>>({});
+  const [blocks, setBlocks] = useState<Block[]>([]);
+
+  const [view, setView] = useState<View>('dashboard');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [menu, setMenu] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setError('');
+
+    const {
+      data: { session: currentSession },
+    } = await supabase.auth.getSession();
+
+    setSession(currentSession);
+
+    if (!currentSession) {
+      setLoading(false);
+      return;
+    }
+
+    const uid = currentSession.user.id;
+
+    const [
+      profileResult,
+      roleResult,
+      productResult,
+      entitlementResult,
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id,name,email')
+        .eq('id', uid)
+        .maybeSingle(),
+
+      supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', uid)
+        .maybeSingle(),
+
+      supabase
+        .from('products')
+        .select('id,name,description')
+        .eq('slug', 'metodo-foco-de-aco')
+        .maybeSingle(),
+
+      supabase
+        .from('entitlements')
+        .select('id,status,product_id')
+        .eq('user_id', uid)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+    if (
+      profileResult.error ||
+      roleResult.error ||
+      productResult.error ||
+      entitlementResult.error
+    ) {
+      setError(
+        profileResult.error?.message ||
+          roleResult.error?.message ||
+          productResult.error?.message ||
+          entitlementResult.error?.message ||
+          'Falha ao carregar conta.'
+      );
+      setLoading(false);
+      return;
+    }
+
+    setProfile(profileResult.data);
+
+    setRole(
+      (roleResult.data?.role as 'student' | 'admin') ||
+        'student'
+    );
+
+    setProduct(productResult.data);
+    setEntitlement(entitlementResult.data);
+
+    if (
+      productResult.data &&
+      (entitlementResult.data ||
+        roleResult.data?.role === 'admin')
+    ) {
+      const [
+        lessonsResult,
+        challengesResult,
+        promptsResult,
+        lessonProgressResult,
+        challengeProgressResult,
+        plannerResult,
+      ] = await Promise.all([
+        supabase
+          .from('lessons')
+          .select(
+            'id,title,subtitle,duration_minutes,content,position'
+          )
+          .eq('product_id', productResult.data.id)
+          .order('position'),
+
+        supabase
+          .from('challenges')
+          .select(
+            'id,slug,name,description,config'
+          )
+          .eq('product_id', productResult.data.id),
+
+        supabase
+          .from('prompts')
+          .select(
+            'id,title,text,position'
+          )
+          .eq('product_id', productResult.data.id)
+          .order('position'),
+
+        supabase
+          .from('lesson_progress')
+          .select('lesson_id')
+          .eq('user_id', uid),
+
+        supabase
+          .from('challenge_progress')
+          .select(
+            'challenge_id,state'
+          )
+          .eq('user_id', uid),
+
+        supabase
+          .from('planner_blocks')
+          .select(
+            'id,starts_at,ends_at,title,notes'
+          )
+          .eq('user_id', uid)
+          .order('starts_at'),
+      ]);
+
+      if (
+        lessonsResult.error ||
+        challengesResult.error ||
+        promptsResult.error ||
+        lessonProgressResult.error ||
+        challengeProgressResult.error ||
+        plannerResult.error
+      ) {
+        setError(
+          'Alguns dados não puderam ser carregados.'
+        );
+      } else {
+        setLessons(
+          (lessonsResult.data || []) as Lesson[]
+        );
+
+        setChallenges(
+          (challengesResult.data || []) as Challenge[]
+        );
+
+        setPrompts(
+          (promptsResult.data || []) as Prompt[]
+        );
+
+        setProgress(
+          (lessonProgressResult.data || []).map(
+            (item: any) => item.lesson_id
+          )
+        );
+
+        const states: Record<string, any> = {};
+
+        (
+          challengeProgressResult.data || []
+        ).forEach((item: any) => {
+          states[item.challenge_id] =
+            item.state;
+        });
+
+        setChallengeState(states);
+
+        setBlocks(
+          (plannerResult.data || []) as Block[]
+        );
+      }
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
+    refresh();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      refresh();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (!isSupabaseConfigured) {
+    return <ConfigMissing />;
   }
-  setLoading(false);
- };
- useEffect(()=>{refresh();if(!supabase)return;const {data:{subscription}}=supabase.auth.onAuthStateChange(()=>refresh());return()=>subscription.unsubscribe()},[]);
- if(!supabase)return <ConfigMissing/>;
- if(loading&&!session)return <Splash/>;
- if(!session)return <Landing/>;
- if(!entitlement&&role!=='admin')return <AccessPending email={profile?.email||session.user.email||''} onSignOut={()=>supabase.auth.signOut()}/>;
- const completeLesson=async(id:string)=>{if(progress.includes(id))return;const {error:e}=await supabase.from('lesson_progress').insert({user_id:session.user.id,lesson_id:id});if(!e)setProgress([...progress,id]);};
- const saveChallenge=async(challengeId:string,state:any)=>{const {error:e}=await supabase.from('challenge_progress').upsert({user_id:session.user.id,challenge_id:challengeId,state,updated_at:new Date().toISOString()},{onConflict:'user_id,challenge_id'});if(!e)setChallengeState({...challengeState,[challengeId]:state});};
- const signOut=()=>supabase.auth.signOut();
- return <div className="min-h-screen bg-zinc-950 text-zinc-100"><header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4"><button onClick={()=>setView('dashboard')} className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-yellow-400 text-zinc-950"><Zap size={20}/></span><span className="text-left"><b className="block tracking-tight">FOCO DE AÇO</b><small className="uppercase tracking-[.2em] text-zinc-500">Sistema de produtividade</small></span></button><div className="flex items-center gap-2"><span className="hidden text-sm text-zinc-500 md:block">{profile?.name||profile?.email||session.user.email}</span>{role==='admin'&&<span className="hidden items-center gap-1 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-xs text-yellow-300 md:flex"><ShieldCheck size={13}/> Admin</span>}<button onClick={signOut} className="hidden rounded-xl border border-zinc-800 p-2 text-zinc-400 hover:text-white md:block" title="Sair"><LogOut size={17}/></button><button onClick={()=>setMenu(!menu)} className="rounded-xl border border-zinc-800 p-2 md:hidden">{menu?<X/>:<Menu/>}</button></div></div></header>
- <div className="mx-auto flex max-w-7xl"><aside className={`${menu?'block':'hidden'} fixed inset-x-0 top-16 z-20 border-b border-zinc-800 bg-zinc-950 p-3 md:sticky md:top-16 md:block md:h-[calc(100vh-4rem)] md:w-64 md:shrink-0 md:border-0 md:bg-transparent md:p-4`}><nav className="space-y-1">{nav.map(([id,label,Icon])=><button key={id} onClick={()=>{setView(id);setMenu(false)}} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${view===id?'bg-yellow-400/10 text-yellow-300':'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}><Icon size={17}/>{label}</button>)}{role==='admin'&&<><div className="my-3 border-t border-zinc-800"/><button onClick={()=>{setView('admin');setMenu(false)}} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${view==='admin'?'bg-yellow-400/10 text-yellow-300':'text-zinc-400 hover:bg-zinc-900 hover:text-white'}`}><LockKeyhole size={17}/>Área administrativa</button></>}<button onClick={signOut} className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white md:hidden"><LogOut size={17}/>Sair</button></nav></aside>
- <main className="min-w-0 flex-1 p-4 md:p-8">{error&&<div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-300">{error}</div>}
- {view==='dashboard'&&<Dashboard name={profile?.name||'Aluno'} progress={Math.round(progress.length/Math.max(lessons.length,1)*100)} lessons={lessons.length} completed={progress.length} days={countDays(challengeState,challenges)}/>} 
- {view==='lessons'&&<Lessons lessons={lessons} progress={progress} complete={completeLesson}/>} 
- {view==='challenges'&&<Challenges challenges={challenges} state={challengeState} save={saveChallenge}/>} 
- {view==='timer'&&<Timer/>} {view==='planner'&&<Planner blocks={blocks} setBlocks={setBlocks} userId={session.user.id}/>} 
- {view==='prompts'&&<Prompts prompts={prompts} copied={copied} setCopied={setCopied}/>} {view==='progress'&&<Progress progress={progress.length} total={lessons.length} days={countDays(challengeState,challenges)}/>} {view==='admin'&&role==='admin'&&<Admin actorUserId={session.user.id}/>}
- </main></div><footer className="border-t border-zinc-900 py-6 text-center text-xs text-zinc-600">Método Foco de Aço • Sistema de Produtividade e Controle da Rotina</footer></div>;
+
+  if (loading && !session) {
+    return <Splash />;
+  }
+
+  if (!session) {
+    return <Landing />;
+  }
+
+  if (!entitlement && role !== 'admin') {
+    return (
+      <AccessPending
+        email={
+          profile?.email ||
+          session.user.email ||
+          ''
+        }
+        onSignOut={() =>
+          supabase.auth.signOut()
+        }
+      />
+    );
+  }
+
+  const completeLesson = async (
+    lessonId: string
+  ) => {
+    if (progress.includes(lessonId)) {
+      return;
+    }
+
+    const { error: insertError } =
+      await supabase
+        .from('lesson_progress')
+        .insert({
+          user_id: session.user.id,
+          lesson_id: lessonId,
+        });
+
+    if (!insertError) {
+      setProgress([
+        ...progress,
+        lessonId,
+      ]);
+    }
+  };
+
+  const saveChallenge = async (
+    challengeId: string,
+    state: any
+  ) => {
+    const { error: saveError } =
+      await supabase
+        .from('challenge_progress')
+        .upsert(
+          {
+            user_id: session.user.id,
+            challenge_id: challengeId,
+            state,
+            updated_at:
+              new Date().toISOString(),
+          },
+          {
+            onConflict:
+              'user_id,challenge_id',
+          }
+        );
+
+    if (!saveError) {
+      setChallengeState({
+        ...challengeState,
+        [challengeId]: state,
+      });
+    }
+  };
+
+  const signOut = () => {
+    supabase.auth.signOut();
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <header className="sticky top-0 z-30 border-b border-zinc-800/80 bg-zinc-950/90 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+          <button
+            onClick={() =>
+              setView('dashboard')
+            }
+            className="flex items-center gap-3"
+          >
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-yellow-400 text-zinc-950">
+              <Zap size={20} />
+            </span>
+
+            <span className="text-left">
+              <b className="block tracking-tight">
+                FOCO DE AÇO
+              </b>
+
+              <small className="uppercase tracking-[.2em] text-zinc-500">
+                Sistema de produtividade
+              </small>
+            </span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <span className="hidden text-sm text-zinc-500 md:block">
+              {profile?.name ||
+                profile?.email ||
+                session.user.email}
+            </span>
+
+            {role === 'admin' && (
+              <span className="hidden items-center gap-1 rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-1 text-xs text-yellow-300 md:flex">
+                <ShieldCheck size={13} />
+                Admin
+              </span>
+            )}
+
+            <button
+              onClick={signOut}
+              className="hidden rounded-xl border border-zinc-800 p-2 text-zinc-400 hover:text-white md:block"
+              title="Sair"
+            >
+              <LogOut size={17} />
+            </button>
+
+            <button
+              onClick={() =>
+                setMenu(!menu)
+              }
+              className="rounded-xl border border-zinc-800 p-2 md:hidden"
+            >
+              {menu ? <X /> : <Menu />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto flex max-w-7xl">
+        <aside
+          className={`${
+            menu ? 'block' : 'hidden'
+          } fixed inset-x-0 top-16 z-20 border-b border-zinc-800 bg-zinc-950 p-3 md:sticky md:top-16 md:block md:h-[calc(100vh-4rem)] md:w-64 md:shrink-0 md:border-0 md:bg-transparent md:p-4`}
+        >
+          <nav className="space-y-1">
+            {nav.map(
+              ([id, label, Icon]) => (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setView(id);
+                    setMenu(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+                    view === id
+                      ? 'bg-yellow-400/10 text-yellow-300'
+                      : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                  }`}
+                >
+                  <Icon size={17} />
+                  {label}
+                </button>
+              )
+            )}
+
+            {role === 'admin' && (
+              <>
+                <div className="my-3 border-t border-zinc-800" />
+
+                <button
+                  onClick={() => {
+                    setView('admin');
+                    setMenu(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
+                    view === 'admin'
+                      ? 'bg-yellow-400/10 text-yellow-300'
+                      : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                  }`}
+                >
+                  <LockKeyhole size={17} />
+                  Área administrativa
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={signOut}
+              className="mt-4 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-900 hover:text-white md:hidden"
+            >
+              <LogOut size={17} />
+              Sair
+            </button>
+          </nav>
+        </aside>
+
+        <main className="min-w-0 flex-1 p-4 md:p-8">
+          {error && (
+            <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-300">
+              {error}
+            </div>
+          )}
+
+          {view === 'dashboard' && (
+            <Dashboard
+              name={
+                profile?.name || 'Aluno'
+              }
+              progress={Math.round(
+                (progress.length /
+                  Math.max(
+                    lessons.length,
+                    1
+                  )) *
+                  100
+              )}
+              lessons={lessons.length}
+              completed={progress.length}
+              days={countDays(
+                challengeState,
+                challenges
+              )}
+            />
+          )}
+
+          {view === 'lessons' && (
+            <Lessons
+              lessons={lessons}
+              progress={progress}
+              complete={completeLesson}
+            />
+          )}
+
+          {view === 'challenges' && (
+            <Challenges
+              challenges={challenges}
+              state={challengeState}
+              save={saveChallenge}
+            />
+          )}
+
+          {view === 'timer' && <Timer />}
+
+          {view === 'planner' && (
+            <Planner
+              blocks={blocks}
+              setBlocks={setBlocks}
+              userId={session.user.id}
+            />
+          )}
+
+          {view === 'prompts' && (
+            <Prompts
+              prompts={prompts}
+              copied={copied}
+              setCopied={setCopied}
+            />
+          )}
+
+          {view === 'progress' && (
+            <Progress
+              progress={progress.length}
+              total={lessons.length}
+              days={countDays(
+                challengeState,
+                challenges
+              )}
+            />
+          )}
+
+          {view === 'admin' &&
+            role === 'admin' && (
+              <Admin
+                actorUserId={
+                  session.user.id
+                }
+                productId={
+                  product?.id || ''
+                }
+              />
+            )}
+        </main>
+      </div>
+
+      <footer className="border-t border-zinc-900 py-6 text-center text-xs text-zinc-600">
+        Método Foco de Aço • Sistema de Produtividade e Controle da Rotina
+      </footer>
+    </div>
+  );
 }
 
-function Landing(){const [mode,setMode]=useState<'login'|'signup'>('login');const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [name,setName]=useState('');const [busy,setBusy]=useState(false);const [msg,setMsg]=useState('');const submit=async(e:any)=>{e.preventDefault();if(!supabase)return;setBusy(true);setMsg('');const r=mode==='login'?await supabase.auth.signInWithPassword({email,password}):await supabase.auth.signUp({email,password,options:{data:{name}}});setBusy(false);if(r.error)setMsg(r.error.message);else setMsg(mode==='login'?'Entrando…':'Conta criada. Confirme seu e-mail se o projeto exigir confirmação.');};return <div className="min-h-screen bg-zinc-950 text-zinc-100"><section className="relative overflow-hidden"><div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,.13),transparent_35%)]"/><div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-6 py-14 lg:grid-cols-[1.25fr_.75fr]"><div><div className="mb-5 inline-flex items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/5 px-3 py-1 text-xs font-bold text-yellow-300"><Sparkles size={13}/> Sistema completo de produtividade</div><h1 className="max-w-3xl text-5xl font-black tracking-tight md:text-7xl">Pare de apenas planejar.<br/><span className="text-yellow-300">Comece a executar.</span></h1><p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">O Método Foco de Aço organiza sua rotina em um sistema prático de foco, prioridade, blocos de tempo, desafios e acompanhamento de progresso.</p><div className="mt-8 grid gap-3 sm:grid-cols-2"><Benefit text="Método passo a passo"/><Benefit text="Desafio de 24h + 7 dias"/><Benefit text="Planner de blocos"/><Benefit text="30 prompts para IA"/></div>{checkoutUrl!=='#'&&<a href={checkoutUrl} target="_blank" rel="noreferrer" className="mt-9 inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 font-black text-zinc-950">Quero meu acesso <ChevronRight size={17}/></a>}</div><div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl"><div className="mb-6"><div className="text-xs font-bold uppercase tracking-widest text-yellow-300">Área do aluno</div><h2 className="mt-2 text-2xl font-black">{mode==='login'?'Entrar no sistema':'Criar minha conta'}</h2><p className="mt-1 text-sm text-zinc-500">Seu acesso é validado pelo Supabase.</p></div><form onSubmit={submit} className="space-y-3">{mode==='signup'&&<input value={name} onChange={e=>setName(e.target.value)} required placeholder="Seu nome" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"/>}<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="E-mail" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"/><input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength={8} placeholder="Senha (mín. 8 caracteres)" className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"/>{msg&&<div className="rounded-xl bg-zinc-800 p-3 text-sm text-zinc-300">{msg}</div>}<button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-400 px-4 py-3 font-black text-zinc-950 disabled:opacity-50">{busy?'Processando…':mode==='login'?'Entrar':'Criar conta'} <LogIn size={17}/></button></form><button onClick={()=>{setMode(mode==='login'?'signup':'login');setMsg('')}} className="mt-4 w-full text-sm text-zinc-500 hover:text-yellow-300">{mode==='login'?'Ainda não tenho conta':'Já tenho conta'}</button></div></div></section></div>}
-function Benefit({text}:{text:string}){return <div className="flex items-center gap-2 text-sm text-zinc-300"><CheckCircle2 size={17} className="text-yellow-300"/>{text}</div>}
-function AccessPending({email,onSignOut}:{email:string;onSignOut:()=>void}){return <div className="grid min-h-screen place-items-center bg-zinc-950 p-6 text-zinc-100"><div className="max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900/60 p-8 text-center"><LockKeyhole className="mx-auto text-yellow-300" size={40}/><h1 className="mt-5 text-3xl font-black">Acesso aguardando liberação</h1><p className="mt-3 text-zinc-400">A conta <b className="text-zinc-200">{email}</b> está autenticada, mas não possui um entitlement ativo para o Método Foco de Aço.</p><p className="mt-3 text-sm text-zinc-500">Após a compra, o webhook da plataforma de pagamento libera o acesso automaticamente.</p><button onClick={onSignOut} className="mt-6 rounded-xl border border-zinc-700 px-4 py-3 text-sm">Sair</button></div></div>}
-function ConfigMissing(){return <div className="grid min-h-screen place-items-center bg-zinc-950 p-6"><div className="max-w-xl rounded-3xl border border-red-500/20 bg-red-500/5 p-8"><h1 className="text-2xl font-black">Configuração incompleta</h1><p className="mt-3 text-zinc-400">Configure <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_PUBLISHABLE_KEY</code> no ambiente da Vercel.</p></div></div>}
-function Splash(){return <div className="grid min-h-screen place-items-center bg-zinc-950"><div className="text-center"><div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-yellow-400 text-zinc-950"><Zap/></div><p className="mt-4 text-sm text-zinc-500">Carregando seu sistema…</p></div></div>}
-function Dashboard({name,progress,lessons,completed,days}:{name:string;progress:number;lessons:number;completed:number;days:number}){return <><Title title={`Bom trabalho, ${name.split(' ')[0]}.`} text="Seu painel central para estudar, executar e acompanhar sua evolução."/><div className="grid gap-4 md:grid-cols-4"><Card label="Progresso" value={`${progress}%`} icon={<BarChart3/>}/><Card label="Aulas" value={`${completed}/${lessons}`} icon={<BookOpen/>}/><Card label="Desafio 7 dias" value={`${days}/7`} icon={<Flame/>}/><Card label="Acesso" value="Ativo" icon={<ShieldCheck/>}/></div><div className="mt-6 rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-7"><div className="flex items-center gap-3"><Target className="text-yellow-300"/><h2 className="text-2xl font-black">Uma prioridade. Um bloco. Uma execução.</h2></div><p className="mt-3 max-w-2xl leading-7 text-zinc-400">Escolha a tarefa que mais move seu dia, reserve o bloco de tempo e execute antes de abrir novas frentes.</p></div></>}
-function Title({title,text}:{title:string;text:string}){return <div className="mb-7"><div className="mb-2 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-yellow-300"><Sparkles size={13}/> Método Foco de Aço</div><h1 className="text-3xl font-black tracking-tight md:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-zinc-400">{text}</p></div>}
-function Card({label,value,icon}:{label:string;value:string;icon:any}){return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><div className="mb-5 flex items-center justify-between"><span className="text-sm text-zinc-500">{label}</span><span className="text-yellow-300">{icon}</span></div><div className="text-3xl font-black">{value}</div></div>}
-function Lessons({lessons,progress,complete}:{lessons:Lesson[];progress:string[];complete:(id:string)=>void}){const [selected,setSelected]=useState(lessons[0]);useEffect(()=>{if(lessons.length&&!selected)setSelected(lessons[0])},[lessons]);if(!lessons.length)return <Empty text="O conteúdo ainda não foi publicado."/>;return <><Title title="Método Foco de Aço" text="Leia, aplique e conclua cada etapa. O progresso fica salvo na sua conta."/><div className="grid gap-6 lg:grid-cols-[320px_1fr]"><div className="space-y-2">{lessons.map((l,i)=><button key={l.id} onClick={()=>setSelected(l)} className={`w-full rounded-2xl border p-4 text-left ${selected?.id===l.id?'border-yellow-400/40 bg-yellow-400/5':'border-zinc-800 bg-zinc-900/40'}`}><div className="flex items-center gap-3"><span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-800 text-xs font-bold">{i+1}</span><div className="min-w-0 flex-1"><div className="font-semibold">{l.title}</div><div className="text-xs text-zinc-500">{l.duration_minutes} min</div></div>{progress.includes(l.id)&&<CheckCircle2 className="text-green-400" size={18}/>}</div></button>)}</div><article className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6 md:p-8"><span className="text-xs font-bold uppercase tracking-widest text-yellow-400">{selected?.duration_minutes} min</span><h2 className="mt-2 text-3xl font-black">{selected?.title}</h2><p className="mt-2 text-zinc-400">{selected?.subtitle}</p><div className="mt-8 space-y-5">{selected?.content?.map((c,i)=><div key={i} className="flex gap-4"><span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-zinc-700 text-xs">{i+1}</span><p className="leading-7 text-zinc-300">{c}</p></div>)}</div><button disabled={!selected||progress.includes(selected.id)} onClick={()=>selected&&complete(selected.id)} className="mt-9 flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 font-bold text-zinc-950 disabled:opacity-50">{selected&&progress.includes(selected.id)?'Aula concluída':'Concluir aula'} <Check size={17}/></button></article></div></>}
-function Challenges({challenges,state,save}:{challenges:Challenge[];state:Record<string,any>;save:(id:string,s:any)=>Promise<void>}){return <><Title title="Desafios" text="Transforme o método em comportamento por meio de execução prática."/><div className="grid gap-6 lg:grid-cols-2">{challenges.map(c=>c.slug==='desafio-24h'?<Challenge24 key={c.id} challenge={c} state={state[c.id]||{}} save={s=>save(c.id,s)}/>:<Challenge7 key={c.id} challenge={c} state={state[c.id]||{}} save={s=>save(c.id,s)}/>)}</div></>}
-function Challenge24({challenge,state,save}:{challenge:Challenge;state:any;save:(s:any)=>Promise<void>}){const items=challenge.config.items||[];const checks=state.checks||items.map(()=>false);return <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6"><h2 className="text-xl font-bold">{challenge.name}</h2><p className="mt-1 text-sm text-zinc-500">{challenge.description}</p><div className="mt-5 space-y-2">{items.map((x,i)=><label key={x} className="flex cursor-pointer items-center gap-3 rounded-xl p-3 hover:bg-zinc-800"><input type="checkbox" checked={!!checks[i]} onChange={()=>save({checks:checks.map((v:boolean,j:number)=>j===i?!v:v)})} className="accent-yellow-400"/><span className={checks[i]?'text-zinc-500 line-through':'text-zinc-300'}>{x}</span></label>)}</div></div>}
-function Challenge7({challenge,state,save}:{challenge:Challenge;state:any;save:(s:any)=>Promise<void>}){const days=Number(challenge.config.days||7);const done=state.days||Array(days).fill(false);return <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6"><h2 className="text-xl font-bold">{challenge.name}</h2><p className="mt-1 text-sm text-zinc-500">{challenge.description}</p><div className="mt-5 grid grid-cols-7 gap-2">{done.map((v:boolean,i:number)=><button key={i} onClick={()=>save({days:done.map((x:boolean,j:number)=>j===i?!x:x)})} className={`aspect-square rounded-xl border text-sm font-bold ${v?'border-yellow-400 bg-yellow-400 text-zinc-950':'border-zinc-700 bg-zinc-900 text-zinc-500'}`}>{i+1}</button>)}</div><div className="mt-6 flex items-center gap-2 text-sm text-zinc-400"><Flame size={16} className="text-yellow-400"/> {done.filter(Boolean).length}/{days} dias</div></div>}
-function Timer(){const [mode,setMode]=useState<25|50>(50);const [seconds,setSeconds]=useState(3000);const [running,setRunning]=useState(false);useEffect(()=>{if(!running)return;const id=window.setInterval(()=>setSeconds(s=>s>0?s-1:0),1000);return()=>window.clearInterval(id)},[running]);useEffect(()=>{setSeconds(mode*60);setRunning(false)},[mode]);return <><Title title="Pomodoro" text="Use o tempo como ferramenta de execução, não como decoração."/><div className="mx-auto max-w-xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 text-center"><div className="flex justify-center gap-2"><button onClick={()=>setMode(25)} className={`rounded-xl px-4 py-2 text-sm ${mode===25?'bg-yellow-400 text-zinc-950':'bg-zinc-800 text-zinc-400'}`}>25/5</button><button onClick={()=>setMode(50)} className={`rounded-xl px-4 py-2 text-sm ${mode===50?'bg-yellow-400 text-zinc-950':'bg-zinc-800 text-zinc-400'}`}>50/10</button></div><div className="my-10 text-7xl font-black tabular-nums">{String(Math.floor(seconds/60)).padStart(2,'0')}:{String(seconds%60).padStart(2,'0')}</div><button onClick={()=>setRunning(!running)} className="rounded-xl bg-yellow-400 px-7 py-3 font-bold text-zinc-950">{running?'Pausar':'Começar foco'}</button><button onClick={()=>{setSeconds(mode*60);setRunning(false)}} className="ml-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm">Resetar</button></div></>}
-function Planner({blocks,setBlocks,userId}:{blocks:Block[];setBlocks:Dispatch<SetStateAction<Block[]>>;userId:string}){const [title,setTitle]=useState('');const add=async()=>{if(!supabase||!title.trim())return;const now=new Date();const {data,error}=await supabase.from('planner_blocks').insert({user_id:userId,starts_at:now.toISOString(),title:title.trim()}).select('id,starts_at,ends_at,title,notes').single();if(!error&&data){setBlocks([...blocks,data]);setTitle('')}};const del=async(id:string)=>{if(!supabase)return;await supabase.from('planner_blocks').delete().eq('id',id);setBlocks(blocks.filter(b=>b.id!==id))};return <><Title title="Planner de Blocos" text="Planeje quando você fará o trabalho, não apenas o que deseja fazer."/><div className="max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6"><div className="flex gap-2"><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex.: Estudar TypeScript por 50 minutos" className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"/><button onClick={add} className="rounded-xl bg-yellow-400 px-4 text-zinc-950"><Plus/></button></div><div className="mt-5 space-y-2">{blocks.map(b=><div key={b.id} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4"><Clock3 size={17} className="text-yellow-400"/><div className="min-w-0 flex-1"><div className="font-semibold">{b.title}</div><div className="text-xs text-zinc-500">{new Date(b.starts_at).toLocaleString('pt-BR')}</div></div><button onClick={()=>del(b.id)} className="text-zinc-600 hover:text-red-300"><Trash2 size={17}/></button></div>)}{!blocks.length&&<Empty text="Seu planner está vazio. Adicione o primeiro bloco."/>}</div></div></>}
-function Prompts({prompts,copied,setCopied}:{prompts:Prompt[];copied:string|null;setCopied:(x:string|null)=>void}){const copy=async(p:Prompt)=>{await navigator.clipboard?.writeText(p.text);setCopied(p.id);setTimeout(()=>setCopied(null),1200)};return <><Title title="30 Prompts de Produtividade" text="Prompts prontos para transformar IA em ferramenta de execução."/><div className="grid gap-4 md:grid-cols-2">{prompts.map(p=><div key={p.id} className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"><div className="flex items-start justify-between gap-4"><div><span className="text-xs text-yellow-400">PROMPT {p.position}</span><h3 className="mt-1 font-bold">{p.title}</h3></div><button onClick={()=>copy(p)} className="rounded-lg border border-zinc-700 p-2 text-zinc-400">{copied===p.id?<CheckCircle2 size={16}/>:<Copy size={16}/>}</button></div><p className="mt-4 text-sm leading-6 text-zinc-400">{p.text}</p></div>)}</div></>}
-function Progress({progress,total,days}:{progress:number;total:number;days:number}){const pct=Math.round(progress/Math.max(total,1)*100);return <><Title title="Meu Progresso" text="Sua evolução é persistida na conta e acompanha você em qualquer dispositivo."/><div className="max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-7"><div className="flex items-end justify-between"><div><div className="text-5xl font-black">{pct}%</div><div className="mt-1 text-zinc-500">conclusão do método</div></div><CheckCircle2 className="text-yellow-400" size={34}/></div><div className="mt-6 h-3 overflow-hidden rounded-full bg-zinc-800"><div className="h-full rounded-full bg-yellow-400" style={{width:`${pct}%`}}/></div><div className="mt-7 grid gap-3 sm:grid-cols-2"><Card label="Aulas concluídas" value={`${progress}/${total}`} icon={<BookOpen/>}/><Card label="Desafio 7 dias" value={`${days}/7`} icon={<Flame/>}/></div></div></>}
-function Admin({actorUserId}:{actorUserId:string}){const [stats,setStats]=useState({users:0,active:0,refunded:0});const [rows,setRows]=useState<any[]>([]);const [busy,setBusy]=useState(true);const load=async()=>{if(!supabase)return;setBusy(true);const [p,e]=await Promise.all([supabase.from('profiles').select('id,name,email,created_at').order('created_at',{ascending:false}),supabase.from('entitlements').select('id,user_id,status,provider,external_transaction_id,created_at').order('created_at',{ascending:false}).limit(30)]);const profiles=new Map((p.data||[]).map((x:any)=>[x.id,x]));const enriched=(e.data||[]).map((x:any)=>({...x,profile:profiles.get(x.user_id)}));setStats({users:p.data?.length||0,active:e.data?.filter((x:any)=>x.status==='active').length||0,refunded:e.data?.filter((x:any)=>x.status==='refunded').length||0});setRows(enriched);setBusy(false)};useEffect(()=>{load()},[]);return <><Title title="Dashboard Administrativo" text="Painel protegido por Supabase Auth + RBAC + RLS. Nenhuma permissão é decidida pelo frontend."/><div className="grid gap-4 md:grid-cols-3"><Card label="Contas" value={String(stats.users)} icon={<Users/>}/><Card label="Acessos ativos" value={String(stats.active)} icon={<CheckCircle2/>}/><Card label="Reembolsados" value={String(stats.refunded)} icon={<RefreshCw/>}/></div><div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/40"><div className="flex items-center justify-between border-b border-zinc-800 p-5"><b>Entitlements recentes</b><button onClick={load} className="rounded-lg border border-zinc-700 p-2"><RefreshCw size={16}/></button></div>{busy?<p className="p-6 text-zinc-500">Carregando…</p>:<div className="divide-y divide-zinc-800">{rows.map(r=><div key={r.id} className="flex flex-wrap items-center gap-4 p-5"><div className="min-w-[220px] flex-1"><b>{r.profile?.name||r.profile?.email||'Aluno'}</b><div className="text-xs text-zinc-500">{r.profile?.email}</div></div><span className="text-xs text-zinc-500">{r.provider}</span><span className={`rounded-full px-3 py-1 text-xs font-bold ${r.status==='active'?'bg-green-400/10 text-green-300':'bg-red-400/10 text-red-300'}`}>{r.status}</span>{r.status==='active'&&<button onClick={async()=>{if(!supabase||!confirm('Revogar este acesso?'))return;await supabase.from('entitlements').update({status:'revoked',revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',r.id);await supabase.from('audit_logs').insert({actor_user_id:actorUserId,action:'entitlement_revoked_manual',target_type:'entitlement',target_id:r.id,metadata:{provider:r.provider}});load()}} className="rounded-lg border border-red-500/20 px-3 py-1 text-xs text-red-300 hover:bg-red-500/10">Revogar</button>}</div>)}{!rows.length&&<p className="p-6 text-zinc-500">Nenhuma venda processada ainda.</p>}</div>}</div></>}
-function Empty({text}:{text:string}){return <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-zinc-500">{text}</div>}
-function countDays(state:Record<string,any>,challenges:Challenge[]){const c=challenges.find(x=>x.slug==='desafio-7-dias');return c?(state[c.id]?.days||[]).filter(Boolean).length:0}
+function Landing() {
+  const [mode, setMode] =
+    useState<'login' | 'signup'>(
+      'login'
+    );
+
+  const [email, setEmail] =
+    useState('');
+
+  const [password, setPassword] =
+    useState('');
+
+  const [name, setName] =
+    useState('');
+
+  const [busy, setBusy] =
+    useState(false);
+
+  const [msg, setMsg] =
+    useState('');
+
+  const submit = async (
+    event: any
+  ) => {
+    event.preventDefault();
+
+    setBusy(true);
+    setMsg('');
+
+    const result =
+      mode === 'login'
+        ? await supabase.auth.signInWithPassword(
+            {
+              email,
+              password,
+            }
+          )
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                name,
+              },
+            },
+          });
+
+    setBusy(false);
+
+    if (result.error) {
+      setMsg(result.error.message);
+      return;
+    }
+
+    setMsg(
+      mode === 'login'
+        ? 'Entrando…'
+        : 'Conta criada. Confirme seu e-mail se o projeto exigir confirmação.'
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,.13),transparent_35%)]" />
+
+        <div className="relative mx-auto grid min-h-screen max-w-6xl items-center gap-12 px-6 py-14 lg:grid-cols-[1.25fr_.75fr]">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-yellow-400/20 bg-yellow-400/5 px-3 py-1 text-xs font-bold text-yellow-300">
+              <Sparkles size={13} />
+              Sistema completo de produtividade
+            </div>
+
+            <h1 className="max-w-3xl text-5xl font-black tracking-tight md:text-7xl">
+              Pare de apenas
+              planejar.
+              <br />
+              <span className="text-yellow-300">
+                Comece a executar.
+              </span>
+            </h1>
+
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-400">
+              O Método Foco de Aço organiza sua
+              rotina em um sistema prático de
+              foco, prioridade, blocos de tempo,
+              desafios e acompanhamento de
+              progresso.
+            </p>
+
+            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+              <Benefit text="Método passo a passo" />
+              <Benefit text="Desafio de 24h + 7 dias" />
+              <Benefit text="Planner de blocos" />
+              <Benefit text="30 prompts para IA" />
+            </div>
+
+            {checkoutUrl !== '#' && (
+              <a
+                href={checkoutUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-9 inline-flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 font-black text-zinc-950"
+              >
+                Quero meu acesso
+                <ChevronRight size={17} />
+              </a>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 shadow-2xl">
+            <div className="mb-6">
+              <div className="text-xs font-bold uppercase tracking-widest text-yellow-300">
+                Área do aluno
+              </div>
+
+              <h2 className="mt-2 text-2xl font-black">
+                {mode === 'login'
+                  ? 'Entrar no sistema'
+                  : 'Criar minha conta'}
+              </h2>
+
+              <p className="mt-1 text-sm text-zinc-500">
+                Seu acesso é validado pelo Supabase.
+              </p>
+            </div>
+
+            <form
+              onSubmit={submit}
+              className="space-y-3"
+            >
+              {mode === 'signup' && (
+                <input
+                  value={name}
+                  onChange={(event) =>
+                    setName(
+                      event.target.value
+                    )
+                  }
+                  required
+                  placeholder="Seu nome"
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"
+                />
+              )}
+
+              <input
+                type="email"
+                value={email}
+                onChange={(event) =>
+                  setEmail(
+                    event.target.value
+                  )
+                }
+                required
+                placeholder="E-mail"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"
+              />
+
+              <input
+                type="password"
+                value={password}
+                onChange={(event) =>
+                  setPassword(
+                    event.target.value
+                  )
+                }
+                required
+                minLength={8}
+                placeholder="Senha (mín. 8 caracteres)"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"
+              />
+
+              {msg && (
+                <div className="rounded-xl bg-zinc-800 p-3 text-sm text-zinc-300">
+                  {msg}
+                </div>
+              )}
+
+              <button
+                disabled={busy}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-400 px-4 py-3 font-black text-zinc-950 disabled:opacity-50"
+              >
+                {busy
+                  ? 'Processando…'
+                  : mode === 'login'
+                    ? 'Entrar'
+                    : 'Criar conta'}
+
+                <LogIn size={17} />
+              </button>
+            </form>
+
+            <button
+              onClick={() => {
+                setMode(
+                  mode === 'login'
+                    ? 'signup'
+                    : 'login'
+                );
+                setMsg('');
+              }}
+              className="mt-4 w-full text-sm text-zinc-500 hover:text-yellow-300"
+            >
+              {mode === 'login'
+                ? 'Ainda não tenho conta'
+                : 'Já tenho conta'}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Benefit({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-zinc-300">
+      <CheckCircle2
+        size={17}
+        className="text-yellow-300"
+      />
+      {text}
+    </div>
+  );
+}
+
+function AccessPending({
+  email,
+  onSignOut,
+}: {
+  email: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-zinc-950 p-6 text-zinc-100">
+      <div className="max-w-lg rounded-3xl border border-zinc-800 bg-zinc-900/60 p-8 text-center">
+        <LockKeyhole
+          className="mx-auto text-yellow-300"
+          size={40}
+        />
+
+        <h1 className="mt-5 text-3xl font-black">
+          Acesso aguardando liberação
+        </h1>
+
+        <p className="mt-3 text-zinc-400">
+          A conta{' '}
+          <b className="text-zinc-200">
+            {email}
+          </b>{' '}
+          está autenticada, mas ainda não possui
+          um acesso ativo ao Método Foco de Aço.
+        </p>
+
+        <p className="mt-3 text-sm text-zinc-500">
+          Após a compra, use o link recebido para
+          criar sua conta. A liberação do acesso é
+          administrada pelo painel administrativo.
+        </p>
+
+        <button
+          onClick={onSignOut}
+          className="mt-6 rounded-xl border border-zinc-700 px-4 py-3 text-sm"
+        >
+          Sair
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConfigMissing() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-zinc-950 p-6 text-zinc-100">
+      <div className="max-w-xl rounded-3xl border border-red-500/20 bg-red-500/5 p-8">
+        <h1 className="text-2xl font-black">
+          Configuração incompleta
+        </h1>
+
+        <p className="mt-3 text-zinc-400">
+          Configure{' '}
+          <code>
+            VITE_SUPABASE_URL
+          </code>{' '}
+          e{' '}
+          <code>
+            VITE_SUPABASE_PUBLISHABLE_KEY
+          </code>{' '}
+          no ambiente da Vercel.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Splash() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-zinc-950">
+      <div className="text-center">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-yellow-400 text-zinc-950">
+          <Zap />
+        </div>
+
+        <p className="mt-4 text-sm text-zinc-500">
+          Carregando seu sistema…
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({
+  name,
+  progress,
+  lessons,
+  completed,
+  days,
+}: {
+  name: string;
+  progress: number;
+  lessons: number;
+  completed: number;
+  days: number;
+}) {
+  return (
+    <>
+      <Title
+        title={`Bom trabalho, ${name.split(' ')[0]}.`}
+        text="Seu painel central para estudar, executar e acompanhar sua evolução."
+      />
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card
+          label="Progresso"
+          value={`${progress}%`}
+          icon={<BarChart3 />}
+        />
+
+        <Card
+          label="Aulas"
+          value={`${completed}/${lessons}`}
+          icon={<BookOpen />}
+        />
+
+        <Card
+          label="Desafio 7 dias"
+          value={`${days}/7`}
+          icon={<Flame />}
+        />
+
+        <Card
+          label="Acesso"
+          value="Ativo"
+          icon={<ShieldCheck />}
+        />
+      </div>
+
+      <div className="mt-6 rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-7">
+        <div className="flex items-center gap-3">
+          <Target className="text-yellow-300" />
+
+          <h2 className="text-2xl font-black">
+            Uma prioridade. Um bloco. Uma execução.
+          </h2>
+        </div>
+
+        <p className="mt-3 max-w-2xl leading-7 text-zinc-400">
+          Escolha a tarefa que mais move seu dia,
+          reserve o bloco de tempo e execute antes de
+          abrir novas frentes.
+        </p>
+      </div>
+    </>
+  );
+}
+
+function Title({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="mb-7">
+      <div className="mb-2 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-yellow-300">
+        <Sparkles size={13} />
+        Método Foco de Aço
+      </div>
+
+      <h1 className="text-3xl font-black tracking-tight md:text-4xl">
+        {title}
+      </h1>
+
+      <p className="mt-2 max-w-2xl text-zinc-400">
+        {text}
+      </p>
+    </div>
+  );
+}
+
+function Card({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: any;
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
+      <div className="mb-5 flex items-center justify-between">
+        <span className="text-sm text-zinc-500">
+          {label}
+        </span>
+
+        <span className="text-yellow-300">
+          {icon}
+        </span>
+      </div>
+
+      <div className="text-3xl font-black">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function Lessons({
+  lessons,
+  progress,
+  complete,
+}: {
+  lessons: Lesson[];
+  progress: string[];
+  complete: (
+    id: string
+  ) => void;
+}) {
+  const [selected, setSelected] =
+    useState<Lesson | null>(
+      lessons[0] || null
+    );
+
+  useEffect(() => {
+    if (
+      lessons.length &&
+      (!selected ||
+        !lessons.some(
+          (lesson) =>
+            lesson.id ===
+            selected.id
+        ))
+    ) {
+      setSelected(lessons[0]);
+    }
+  }, [lessons, selected]);
+
+  if (!lessons.length) {
+    return (
+      <Empty text="O conteúdo ainda não foi publicado." />
+    );
+  }
+
+  return (
+    <>
+      <Title
+        title="Método Foco de Aço"
+        text="Leia, aplique e conclua cada etapa. O progresso fica salvo na sua conta."
+      />
+
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <div className="space-y-2">
+          {lessons.map(
+            (lesson, index) => (
+              <button
+                key={lesson.id}
+                onClick={() =>
+                  setSelected(
+                    lesson
+                  )
+                }
+                className={`w-full rounded-2xl border p-4 text-left ${
+                  selected?.id ===
+                  lesson.id
+                    ? 'border-yellow-400/40 bg-yellow-400/5'
+                    : 'border-zinc-800 bg-zinc-900/40'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-800 text-xs font-bold">
+                    {index + 1}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">
+                      {lesson.title}
+                    </div>
+
+                    <div className="text-xs text-zinc-500">
+                      {lesson.duration_minutes}{' '}
+                      min
+                    </div>
+                  </div>
+
+                  {progress.includes(
+                    lesson.id
+                  ) && (
+                    <CheckCircle2
+                      className="text-green-400"
+                      size={18}
+                    />
+                  )}
+                </div>
+              </button>
+            )
+          )}
+        </div>
+
+        <article className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6 md:p-8">
+          <span className="text-xs font-bold uppercase tracking-widest text-yellow-400">
+            {selected?.duration_minutes}{' '}
+            min
+          </span>
+
+          <h2 className="mt-2 text-3xl font-black">
+            {selected?.title}
+          </h2>
+
+          <p className="mt-2 text-zinc-400">
+            {selected?.subtitle}
+          </p>
+
+          <div className="mt-8 space-y-5">
+            {selected?.content?.map(
+              (content, index) => (
+                <div
+                  key={index}
+                  className="flex gap-4"
+                >
+                  <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full border border-zinc-700 text-xs">
+                    {index + 1}
+                  </span>
+
+                  <p className="leading-7 text-zinc-300">
+                    {content}
+                  </p>
+                </div>
+              )
+            )}
+          </div>
+
+          <button
+            disabled={
+              !selected ||
+              progress.includes(
+                selected.id
+              )
+            }
+            onClick={() =>
+              selected &&
+              complete(
+                selected.id
+              )
+            }
+            className="mt-9 flex items-center gap-2 rounded-xl bg-yellow-400 px-5 py-3 font-bold text-zinc-950 disabled:opacity-50"
+          >
+            {selected &&
+            progress.includes(
+              selected.id
+            )
+              ? 'Aula concluída'
+              : 'Concluir aula'}
+
+            <Check size={17} />
+          </button>
+        </article>
+      </div>
+    </>
+  );
+}
+
+function Challenges({
+  challenges,
+  state,
+  save,
+}: {
+  challenges: Challenge[];
+  state: Record<string, any>;
+  save: (
+    id: string,
+    state: any
+  ) => Promise<void>;
+}) {
+  return (
+    <>
+      <Title
+        title="Desafios"
+        text="Transforme o método em comportamento por meio de execução prática."
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        {challenges.map(
+          (challenge) =>
+            challenge.slug ===
+            'desafio-24h' ? (
+              <Challenge24
+                key={challenge.id}
+                challenge={challenge}
+                state={
+                  state[
+                    challenge.id
+                  ] || {}
+                }
+                save={(newState) =>
+                  save(
+                    challenge.id,
+                    newState
+                  )
+                }
+              />
+            ) : (
+              <Challenge7
+                key={challenge.id}
+                challenge={challenge}
+                state={
+                  state[
+                    challenge.id
+                  ] || {}
+                }
+                save={(newState) =>
+                  save(
+                    challenge.id,
+                    newState
+                  )
+                }
+              />
+            )
+        )}
+      </div>
+    </>
+  );
+}
+
+function Challenge24({
+  challenge,
+  state,
+  save,
+}: {
+  challenge: Challenge;
+  state: any;
+  save: (
+    state: any
+  ) => Promise<void>;
+}) {
+  const items =
+    challenge.config.items ||
+    [];
+
+  const checks =
+    state.checks ||
+    items.map(() => false);
+
+  return (
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6">
+      <h2 className="text-xl font-bold">
+        {challenge.name}
+      </h2>
+
+      <p className="mt-1 text-sm text-zinc-500">
+        {challenge.description}
+      </p>
+
+      <div className="mt-5 space-y-2">
+        {items.map(
+          (item, index) => (
+            <label
+              key={item}
+              className="flex cursor-pointer items-center gap-3 rounded-xl p-3 hover:bg-zinc-800"
+            >
+              <input
+                type="checkbox"
+                checked={
+                  !!checks[index]
+                }
+                onChange={() =>
+                  save({
+                    checks:
+                      checks.map(
+                        (
+                          value: boolean,
+                          currentIndex: number
+                        ) =>
+                          currentIndex ===
+                          index
+                            ? !value
+                            : value
+                      ),
+                  })
+                }
+                className="accent-yellow-400"
+              />
+
+              <span
+                className={
+                  checks[index]
+                    ? 'text-zinc-500 line-through'
+                    : 'text-zinc-300'
+                }
+              >
+                {item}
+              </span>
+            </label>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Challenge7({
+  challenge,
+  state,
+  save,
+}: {
+  challenge: Challenge;
+  state: any;
+  save: (
+    state: any
+  ) => Promise<void>;
+}) {
+  const days = Number(
+    challenge.config.days ||
+      7
+  );
+
+  const done =
+    state.days ||
+    Array(days).fill(false);
+
+  return (
+    <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-6">
+      <h2 className="text-xl font-bold">
+        {challenge.name}
+      </h2>
+
+      <p className="mt-1 text-sm text-zinc-500">
+        {challenge.description}
+      </p>
+
+      <div className="mt-5 grid grid-cols-7 gap-2">
+        {done.map(
+          (
+            value: boolean,
+            index: number
+          ) => (
+            <button
+              key={index}
+              onClick={() =>
+                save({
+                  days: done.map(
+                    (
+                      currentValue: boolean,
+                      currentIndex: number
+                    ) =>
+                      currentIndex ===
+                      index
+                        ? !currentValue
+                        : currentValue
+                  ),
+                })
+              }
+              className={`aspect-square rounded-xl border text-sm font-bold ${
+                value
+                  ? 'border-yellow-400 bg-yellow-400 text-zinc-950'
+                  : 'border-zinc-700 bg-zinc-900 text-zinc-500'
+              }`}
+            >
+              {index + 1}
+            </button>
+          )
+        )}
+      </div>
+
+      <div className="mt-6 flex items-center gap-2 text-sm text-zinc-400">
+        <Flame
+          size={16}
+          className="text-yellow-400"
+        />
+
+        {done.filter(Boolean).length}/
+        {days} dias
+      </div>
+    </div>
+  );
+}
+
+function Timer() {
+  const [mode, setMode] =
+    useState<25 | 50>(50);
+
+  const [seconds, setSeconds] =
+    useState(3000);
+
+  const [running, setRunning] =
+    useState(false);
+
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+
+    const interval =
+      window.setInterval(() => {
+        setSeconds((current) =>
+          current > 0
+            ? current - 1
+            : 0
+        );
+      }, 1000);
+
+    return () =>
+      window.clearInterval(
+        interval
+      );
+  }, [running]);
+
+  useEffect(() => {
+    setSeconds(mode * 60);
+    setRunning(false);
+  }, [mode]);
+
+  return (
+    <>
+      <Title
+        title="Pomodoro"
+        text="Use o tempo como ferramenta de execução, não como decoração."
+      />
+
+      <div className="mx-auto max-w-xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() =>
+              setMode(25)
+            }
+            className={`rounded-xl px-4 py-2 text-sm ${
+              mode === 25
+                ? 'bg-yellow-400 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-400'
+            }`}
+          >
+            25/5
+          </button>
+
+          <button
+            onClick={() =>
+              setMode(50)
+            }
+            className={`rounded-xl px-4 py-2 text-sm ${
+              mode === 50
+                ? 'bg-yellow-400 text-zinc-950'
+                : 'bg-zinc-800 text-zinc-400'
+            }`}
+          >
+            50/10
+          </button>
+        </div>
+
+        <div className="my-10 text-7xl font-black tabular-nums">
+          {String(
+            Math.floor(
+              seconds / 60
+            )
+          ).padStart(2, '0')}
+          :
+          {String(
+            seconds % 60
+          ).padStart(2, '0')}
+        </div>
+
+        <button
+          onClick={() =>
+            setRunning(!running)
+          }
+          className="rounded-xl bg-yellow-400 px-7 py-3 font-bold text-zinc-950"
+        >
+          {running
+            ? 'Pausar'
+            : 'Começar foco'}
+        </button>
+
+        <button
+          onClick={() => {
+            setSeconds(
+              mode * 60
+            );
+            setRunning(false);
+          }}
+          className="ml-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm"
+        >
+          Resetar
+        </button>
+      </div>
+    </>
+  );
+}
+
+function Planner({
+  blocks,
+  setBlocks,
+  userId,
+}: {
+  blocks: Block[];
+  setBlocks: Dispatch<
+    SetStateAction<Block[]>
+  >;
+  userId: string;
+}) {
+  const [title, setTitle] =
+    useState('');
+
+  const add = async () => {
+    if (!title.trim()) {
+      return;
+    }
+
+    const now = new Date();
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('planner_blocks')
+      .insert({
+        user_id: userId,
+        starts_at:
+          now.toISOString(),
+        title: title.trim(),
+      })
+      .select(
+        'id,starts_at,ends_at,title,notes'
+      )
+      .single();
+
+    if (!error && data) {
+      setBlocks([
+        ...blocks,
+        data as Block,
+      ]);
+
+      setTitle('');
+    }
+  };
+
+  const del = async (
+    id: string
+  ) => {
+    await supabase
+      .from('planner_blocks')
+      .delete()
+      .eq('id', id);
+
+    setBlocks(
+      blocks.filter(
+        (block) =>
+          block.id !== id
+      )
+    );
+  };
+
+  return (
+    <>
+      <Title
+        title="Planner de Blocos"
+        text="Planeje quando você fará o trabalho, não apenas o que deseja fazer."
+      />
+
+      <div className="max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-6">
+        <div className="flex gap-2">
+          <input
+            value={title}
+            onChange={(event) =>
+              setTitle(
+                event.target.value
+              )
+            }
+            placeholder="Ex.: Estudar TypeScript por 50 minutos"
+            className="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-yellow-400"
+          />
+
+          <button
+            onClick={add}
+            className="rounded-xl bg-yellow-400 px-4 text-zinc-950"
+          >
+            <Plus />
+          </button>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          {blocks.map(
+            (block) => (
+              <div
+                key={block.id}
+                className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+              >
+                <Clock3
+                  size={17}
+                  className="text-yellow-400"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold">
+                    {block.title}
+                  </div>
+
+                  <div className="text-xs text-zinc-500">
+                    {new Date(
+                      block.starts_at
+                    ).toLocaleString(
+                      'pt-BR'
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() =>
+                    del(
+                      block.id
+                    )
+                  }
+                  className="text-zinc-600 hover:text-red-300"
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            )
+          )}
+
+          {!blocks.length && (
+            <Empty text="Seu planner está vazio. Adicione o primeiro bloco." />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Prompts({
+  prompts,
+  copied,
+  setCopied,
+}: {
+  prompts: Prompt[];
+  copied: string | null;
+  setCopied: (
+    value: string | null
+  ) => void;
+}) {
+  const copy = async (
+    prompt: Prompt
+  ) => {
+    await navigator.clipboard?.writeText(
+      prompt.text
+    );
+
+    setCopied(prompt.id);
+
+    window.setTimeout(
+      () => setCopied(null),
+      1200
+    );
+  };
+
+  return (
+    <>
+      <Title
+        title="30 Prompts de Produtividade"
+        text="Prompts prontos para transformar IA em ferramenta de execução."
+      />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {prompts.map(
+          (prompt) => (
+            <div
+              key={prompt.id}
+              className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <span className="text-xs text-yellow-400">
+                    PROMPT{' '}
+                    {prompt.position}
+                  </span>
+
+                  <h3 className="mt-1 font-bold">
+                    {prompt.title}
+                  </h3>
+                </div>
+
+                <button
+                  onClick={() =>
+                    copy(prompt)
+                  }
+                  className="rounded-lg border border-zinc-700 p-2 text-zinc-400"
+                >
+                  {copied ===
+                  prompt.id ? (
+                    <CheckCircle2 size={16} />
+                  ) : (
+                    <Copy size={16} />
+                  )}
+                </button>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                {prompt.text}
+              </p>
+            </div>
+          )
+        )}
+      </div>
+    </>
+  );
+}
+
+function Progress({
+  progress,
+  total,
+  days,
+}: {
+  progress: number;
+  total: number;
+  days: number;
+}) {
+  const percentage =
+    Math.round(
+      (progress /
+        Math.max(
+          total,
+          1
+        )) *
+        100
+    );
+
+  return (
+    <>
+      <Title
+        title="Meu Progresso"
+        text="Sua evolução é persistida na conta e acompanha você em qualquer dispositivo."
+      />
+
+      <div className="max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-900/50 p-7">
+        <div className="flex items-end justify-between">
+          <div>
+            <div className="text-5xl font-black">
+              {percentage}%
+            </div>
+
+            <div className="mt-1 text-zinc-500">
+              conclusão do método
+            </div>
+          </div>
+
+          <CheckCircle2
+            className="text-yellow-400"
+            size={34}
+          />
+        </div>
+
+        <div className="mt-6 h-3 overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-yellow-400"
+            style={{
+              width: `${percentage}%`,
+            }}
+          />
+        </div>
+
+        <div className="mt-7 grid gap-3 sm:grid-cols-2">
+          <Card
+            label="Aulas concluídas"
+            value={`${progress}/${total}`}
+            icon={<BookOpen />}
+          />
+
+          <Card
+            label="Desafio 7 dias"
+            value={`${days}/7`}
+            icon={<Flame />}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Admin({
+  actorUserId,
+  productId,
+}: {
+  actorUserId: string;
+  productId: string;
+}) {
+  const [stats, setStats] =
+    useState({
+      users: 0,
+      active: 0,
+      revoked: 0,
+    });
+
+  const [rows, setRows] =
+    useState<AdminRow[]>([]);
+
+  const [busy, setBusy] =
+    useState(true);
+
+  const [
+    actionUserId,
+    setActionUserId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const load = async () => {
+    setBusy(true);
+
+    const [
+      profilesResult,
+      entitlementsResult,
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select(
+          'id,name,email,created_at'
+        )
+        .order(
+          'created_at',
+          {
+            ascending: false,
+          }
+        ),
+
+      supabase
+        .from('entitlements')
+        .select(
+          'id,user_id,status,provider,external_transaction_id'
+        )
+        .order(
+          'created_at',
+          {
+            ascending: false,
+          }
+        ),
+    ]);
+
+    if (
+      profilesResult.error ||
+      entitlementsResult.error
+    ) {
+      setBusy(false);
+      return;
+    }
+
+    const entitlementMap =
+      new Map<string, any>();
+
+    (
+      entitlementsResult.data ||
+      []
+    ).forEach((item: any) => {
+      if (
+        !entitlementMap.has(
+          item.user_id
+        )
+      ) {
+        entitlementMap.set(
+          item.user_id,
+          item
+        );
+      }
+    });
+
+    const enriched: AdminRow[] = (
+      profilesResult.data || []
+    ).map((profile: any) => ({
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      created_at:
+        profile.created_at,
+      entitlement:
+        entitlementMap.get(
+          profile.id
+        ) || null,
+    }));
+
+    setStats({
+      users: enriched.length,
+      active: enriched.filter(
+        (row) =>
+          row.entitlement
+            ?.status === 'active'
+      ).length,
+      revoked: enriched.filter(
+        (row) =>
+          row.entitlement
+            ?.status === 'revoked'
+      ).length,
+    });
+
+    setRows(enriched);
+    setBusy(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const activateUser = async (
+    userId: string
+  ) => {
+    if (!productId) {
+      return;
+    }
+
+    if (
+      !confirm(
+        'Liberar o acesso deste usuário?'
+      )
+    ) {
+      return;
+    }
+
+    setActionUserId(userId);
+
+    const row = rows.find(
+      (item) =>
+        item.id === userId
+    );
+
+    const existing =
+      row?.entitlement;
+
+    let entitlementId:
+      | string
+      | null =
+      existing?.id || null;
+
+    let operationError:
+      | any
+      | null = null;
+
+    if (existing) {
+      const result =
+        await supabase
+          .from(
+            'entitlements'
+          )
+          .update({
+            status: 'active',
+            revoked_at: null,
+            refunded_at: null,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            'id',
+            existing.id
+          );
+
+      operationError =
+        result.error;
+    } else {
+      const result =
+        await supabase
+          .from(
+            'entitlements'
+          )
+          .insert({
+            user_id: userId,
+            product_id:
+              productId,
+            provider:
+              'manual',
+            external_transaction_id:
+              `manual-${userId}-${Date.now()}`,
+            status: 'active',
+            purchased_at:
+              new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+      operationError =
+        result.error;
+
+      entitlementId =
+        result.data?.id ||
+        null;
+    }
+
+    if (!operationError) {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          actor_user_id:
+            actorUserId,
+          action:
+            existing
+              ? 'entitlement_reactivated_manual'
+              : 'entitlement_activated_manual',
+          target_type:
+            'entitlement',
+          target_id:
+            entitlementId,
+          metadata: {
+            user_id:
+              userId,
+            provider:
+              'manual',
+          },
+        });
+    }
+
+    setActionUserId(null);
+
+    await load();
+  };
+
+  const revokeUser = async (
+    userId: string
+  ) => {
+    const row = rows.find(
+      (item) =>
+        item.id === userId
+    );
+
+    if (
+      !row?.entitlement
+    ) {
+      return;
+    }
+
+    if (
+      !confirm(
+        'Revogar o acesso deste usuário?'
+      )
+    ) {
+      return;
+    }
+
+    setActionUserId(userId);
+
+    const result =
+      await supabase
+        .from(
+          'entitlements'
+        )
+        .update({
+          status: 'revoked',
+          revoked_at:
+            new Date().toISOString(),
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          'id',
+          row.entitlement.id
+        );
+
+    if (!result.error) {
+      await supabase
+        .from('audit_logs')
+        .insert({
+          actor_user_id:
+            actorUserId,
+          action:
+            'entitlement_revoked_manual',
+          target_type:
+            'entitlement',
+          target_id:
+            row.entitlement.id,
+          metadata: {
+            user_id:
+              userId,
+            provider:
+              row.entitlement
+                .provider,
+          },
+        });
+    }
+
+    setActionUserId(null);
+
+    await load();
+  };
+
+  return (
+    <>
+      <Title
+        title="Dashboard Administrativo"
+        text="Gerencie manualmente os acessos dos alunos. Kiwify e Cakto não precisam estar conectadas ao sistema."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card
+          label="Contas"
+          value={String(
+            stats.users
+          )}
+          icon={<Users />}
+        />
+
+        <Card
+          label="Acessos ativos"
+          value={String(
+            stats.active
+          )}
+          icon={
+            <CheckCircle2 />
+          }
+        />
+
+        <Card
+          label="Acessos revogados"
+          value={String(
+            stats.revoked
+          )}
+          icon={
+            <RefreshCw />
+          }
+        />
+      </div>
+
+      <div className="mt-6 rounded-3xl border border-zinc-800 bg-zinc-900/40">
+        <div className="flex items-center justify-between border-b border-zinc-800 p-5">
+          <div>
+            <b>Usuários</b>
+
+            <p className="mt-1 text-xs text-zinc-500">
+              Libere ou revogue o
+              acesso manualmente.
+            </p>
+          </div>
+
+          <button
+            onClick={load}
+            className="rounded-lg border border-zinc-700 p-2"
+            title="Atualizar"
+          >
+            <RefreshCw size={16} />
+          </button>
+        </div>
+
+        {busy ? (
+          <p className="p-6 text-zinc-500">
+            Carregando…
+          </p>
+        ) : (
+          <div className="divide-y divide-zinc-800">
+            {rows.map(
+              (row) => {
+                const status =
+                  row.entitlement
+                    ?.status ||
+                  'sem acesso';
+
+                const processing =
+                  actionUserId ===
+                  row.id;
+
+                return (
+                  <div
+                    key={row.id}
+                    className="flex flex-wrap items-center gap-4 p-5"
+                  >
+                    <div className="min-w-[240px] flex-1">
+                      <b>
+                        {row.name ||
+                          row.email ||
+                          'Aluno'}
+                      </b>
+
+                      <div className="text-xs text-zinc-500">
+                        {row.email}
+                      </div>
+
+                      <div className="mt-1 text-[11px] text-zinc-600">
+                        Cadastro:{' '}
+                        {new Date(
+                          row.created_at
+                        ).toLocaleDateString(
+                          'pt-BR'
+                        )}
+                      </div>
+                    </div>
+
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-bold ${
+                        status ===
+                        'active'
+                          ? 'bg-green-400/10 text-green-300'
+                          : status ===
+                              'revoked'
+                            ? 'bg-red-400/10 text-red-300'
+                            : 'bg-zinc-800 text-zinc-500'
+                      }`}
+                    >
+                      {status}
+                    </span>
+
+                    {row.entitlement
+                      ?.provider && (
+                      <span className="text-xs text-zinc-500">
+                        {
+                          row
+                            .entitlement
+                            .provider
+                        }
+                      </span>
+                    )}
+
+                    {status !==
+                    'active' ? (
+                      <button
+                        disabled={
+                          processing
+                        }
+                        onClick={() =>
+                          activateUser(
+                            row.id
+                          )
+                        }
+                        className="rounded-lg bg-green-500/10 px-3 py-2 text-xs font-bold text-green-300 hover:bg-green-500/20 disabled:opacity-50"
+                      >
+                        {processing
+                          ? 'Processando…'
+                          : status ===
+                              'revoked'
+                            ? 'Reativar'
+                            : 'Liberar acesso'}
+                      </button>
+                    ) : (
+                      <button
+                        disabled={
+                          processing
+                        }
+                        onClick={() =>
+                          revokeUser(
+                            row.id
+                          )
+                        }
+                        className="rounded-lg border border-red-500/20 px-3 py-2 text-xs font-bold text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                      >
+                        {processing
+                          ? 'Processando…'
+                          : 'Revogar acesso'}
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+            )}
+
+            {!rows.length && (
+              <p className="p-6 text-zinc-500">
+                Nenhuma conta cadastrada
+                ainda.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Empty({
+  text,
+}: {
+  text: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-zinc-800 p-8 text-center text-zinc-500">
+      {text}
+    </div>
+  );
+}
+
+function countDays(
+  state: Record<string, any>,
+  challenges: Challenge[]
+) {
+  const challenge =
+    challenges.find(
+      (item) =>
+        item.slug ===
+        'desafio-7-dias'
+    );
+
+  return challenge
+    ? (
+        state[
+          challenge.id
+        ]?.days || []
+      ).filter(Boolean).length
+    : 0;
+}
