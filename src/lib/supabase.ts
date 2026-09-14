@@ -1,7 +1,20 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+const url = import.meta.env.VITE_SUPABASE_URL;
+const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const supabase = url && key ? createClient(url, key, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}) : null;
-export const checkoutUrl = (import.meta.env.VITE_CHECKOUT_URL as string | undefined) ?? '#';
+export const isSupabaseConfigured = Boolean(url && key);
+
+export const supabase: SupabaseClient = createClient(
+  url || 'https://placeholder.supabase.co',
+  key || 'sb_publishable_placeholder',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
+);
+
+export const checkoutUrl = import.meta.env.VITE_CHECKOUT_URL ?? '#';
