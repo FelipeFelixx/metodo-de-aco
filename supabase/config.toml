@@ -1,0 +1,4 @@
+project_id = "bkshvuhfdvycwicocton"
+
+[functions.payment-webhook-v2]
+verify_jwt = false
