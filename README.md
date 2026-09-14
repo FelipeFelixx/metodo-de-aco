@@ -1,41 +1,83 @@
-# Método Foco de Aço — V2
+# Método Foco de Aço — Produção V2.1
 
-Plataforma comercial de produtividade: área do aluno + base para administração.
+Produto digital comercial: **Sistema de Produtividade e Controle da Rotina**.
 
-## O que a V2 já entrega
-- Dashboard do aluno
-- Aulas e conclusão de conteúdo
-- Desafio 24h
-- Desafio 7 dias
-- Pomodoro 25/5 e 50/10
-- Planner de blocos
-- 30 prompts
-- Progresso persistido localmente para prototipagem
-- Estrutura visual preparada para área administrativa
-- Separação conceitual entre `student` e `admin`
-- Página de vendas integrada ao fluxo por CTA externo
-- Mobile-first / PWA manifest
-- Nenhum segredo de pagamento ou Supabase incluído
+## Arquitetura
 
-## Segurança — regra obrigatória
-Este repositório pode ser público. O frontend NÃO é uma autoridade de acesso.
+- React + Vite + TypeScript + Tailwind CSS
+- Supabase Auth + Postgres + RLS + RBAC
+- Entitlements como fonte de verdade para acesso
+- Kiwify/Cakto via webhook server-side
+- Vercel para hospedagem do frontend
+- Sem `service_role`/secret no frontend
 
-Na integração real:
-Kiwify/Cakto -> webhook seguro -> Edge Function/backend -> entitlement -> Supabase Auth/RLS -> área do aluno.
+## Supabase
 
-Nunca coloque service role/secret keys/webhook secrets no frontend.
+Projeto: `bkshvuhfdvycwicocton`
+URL: `https://bkshvuhfdvycwicocton.supabase.co`
 
-O admin real deve ser autorizado no backend/banco, e não por `localStorage`, query string ou variável React.
+O schema de produção já foi aplicado no projeto conectado. O banco contém produtos, perfis, RBAC, entitlements, aulas, desafios, prompts, progresso, planner, auditoria e idempotência de webhooks.
 
-## O que ainda precisa de integração real
-- Supabase Auth
-- tabelas e RLS
-- entitlements
-- webhook Kiwify
-- webhook Cakto
-- revogação por reembolso/cancelamento
-- dashboard administrativo real
-- checkout/links reais
-- domínio e política de privacidade
+## Variáveis Vercel
 
-A V2 é a base de produto e UX; não deve ser anunciada como sistema de pagamento/autenticação já implementado.
+Configure apenas no ambiente da Vercel:
+
+```text
+VITE_SUPABASE_URL=https://bkshvuhfdvycwicocton.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=<publishable-key-do-projeto>
+VITE_CHECKOUT_URL=<checkout-Kiwify-ou-Cakto>
+```
+
+A chave publishable pode estar no frontend; **secret/service-role nunca**.
+
+## Webhook
+
+Função implantada no Supabase:
+
+`payment-webhook-v2`
+
+Endpoint:
+
+`https://bkshvuhfdvycwicocton.supabase.co/functions/v1/payment-webhook-v2?provider=kiwify`
+
+ou
+
+`https://bkshvuhfdvycwicocton.supabase.co/functions/v1/payment-webhook-v2?provider=cakto`
+
+A função usa autenticação própria do provedor + idempotência. Ela cria/invita a conta do comprador, ativa o entitlement após compra aprovada e revoga após reembolso/chargeback/cancelamento.
+
+Ainda é necessário cadastrar no Supabase Edge Functions Secrets:
+
+- `KIWIFY_WEBHOOK_TOKEN`
+- `CAKTO_WEBHOOK_SECRET`
+
+Também é necessário preencher no produto do banco os IDs externos:
+
+- `products.kiwify_product_id`
+- `products.cakto_product_id`
+
+Não coloque esses segredos no GitHub.
+
+## Admin
+
+O papel administrativo é armazenado em `user_roles` e protegido por RLS. Não existe botão de “modo admin” no frontend.
+
+Depois de criar a conta do proprietário, a promoção para `admin` deve ser feita no banco por operação administrativa confiável. O cliente nunca consegue alterar o próprio papel.
+
+## Segurança
+
+- RLS habilitado em todas as tabelas expostas.
+- `user_metadata` não é usado para autorização.
+- Entitlement ativo é obrigatório para conteúdo do produto.
+- Aluno só altera o próprio progresso/planner.
+- Webhooks têm proteção por segredo e idempotência.
+- Frontend não concede acesso.
+
+## Build
+
+```bash
+npm install
+npm run build
+```
+
+O erro original de Vercel foi corrigido adicionando `@types/react` e `@types/react-dom` e alinhando React/ReactDOM.

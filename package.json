@@ -1,23 +1,9 @@
 {
-  "name": "metodo-foco-de-aco-v2",
-  "private": true,
-  "version": "2.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@vitejs/plugin-react": "^5.0.4",
-    "@tailwindcss/vite": "^4.1.13",
-    "lucide-react": "^0.468.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "tailwindcss": "^4.1.13",
-    "vite": "^7.1.5"
-  },
-  "devDependencies": {
-    "typescript": "^5.9.2"
-  }
+  "name":"metodo-foco-de-aco",
+  "private":true,
+  "version":"2.1.0",
+  "type":"module",
+  "scripts":{"dev":"vite","build":"tsc -b && vite build","preview":"vite preview"},
+  "dependencies":{"@supabase/supabase-js":"2.116.0","@tailwindcss/vite":"4.1.13","@vitejs/plugin-react":"5.0.4","lucide-react":"0.468.0","react":"19.3.0","react-dom":"19.3.0","tailwindcss":"4.1.13","vite":"7.1.5"},
+  "devDependencies":{"@types/react":"19.3.0","@types/react-dom":"19.3.0","typescript":"5.9.2"}
 }
