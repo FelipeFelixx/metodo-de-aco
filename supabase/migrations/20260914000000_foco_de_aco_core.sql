@@ -1,0 +1,22 @@
+-- Cloud migration already applied to project bkshvuhfdvycwicocton.
+-- This file documents the production schema. The authoritative deployed migration
+-- includes RLS, RBAC, entitlements, progress, planner and webhook idempotency.
+
+create type public.app_role as enum ('student','admin');
+create type public.entitlement_status as enum ('active','refunded','revoked','pending');
+create type public.provider_name as enum ('kiwify','cakto','manual');
+
+create table public.products (id uuid primary key default gen_random_uuid(), slug text unique not null, name text not null, description text, active boolean not null default true, kiwify_product_id text, cakto_product_id text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table public.profiles (id uuid primary key references auth.users(id) on delete cascade, name text, email text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table public.user_roles (user_id uuid primary key references auth.users(id) on delete cascade, role public.app_role not null default 'student', created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table public.entitlements (id uuid primary key default gen_random_uuid(), user_id uuid not null references auth.users(id) on delete cascade, product_id uuid not null references public.products(id), provider public.provider_name not null, external_transaction_id text not null, status public.entitlement_status not null default 'pending', purchased_at timestamptz, guarantee_until timestamptz, refunded_at timestamptz, revoked_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now(), unique(provider,external_transaction_id));
+create table public.lessons (id uuid primary key default gen_random_uuid(), product_id uuid not null references public.products(id) on delete cascade, slug text not null, title text not null, subtitle text, duration_minutes integer not null, content jsonb not null default '[]', position integer not null, published boolean not null default false, unique(product_id,slug));
+create table public.challenges (id uuid primary key default gen_random_uuid(), product_id uuid not null references public.products(id) on delete cascade, slug text not null, name text not null, description text, config jsonb not null default '{}', published boolean not null default false, unique(product_id,slug));
+create table public.prompts (id uuid primary key default gen_random_uuid(), product_id uuid not null references public.products(id) on delete cascade, title text not null, text text not null, position integer not null, published boolean not null default false, unique(product_id,position));
+create table public.lesson_progress (user_id uuid references auth.users(id) on delete cascade, lesson_id uuid references public.lessons(id) on delete cascade, completed_at timestamptz not null default now(), updated_at timestamptz not null default now(), primary key(user_id,lesson_id));
+create table public.challenge_progress (user_id uuid references auth.users(id) on delete cascade, challenge_id uuid references public.challenges(id) on delete cascade, state jsonb not null default '{}', updated_at timestamptz not null default now(), primary key(user_id,challenge_id));
+create table public.planner_blocks (id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id) on delete cascade, starts_at timestamptz not null, ends_at timestamptz, title text not null, notes text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table public.audit_logs (id uuid primary key default gen_random_uuid(), actor_user_id uuid references auth.users(id) on delete set null, action text not null, target_type text, target_id text, metadata jsonb not null default '{}', created_at timestamptz not null default now());
+create table public.webhook_events (id uuid primary key default gen_random_uuid(), provider public.provider_name not null, external_event_id text not null, event_type text not null, payload jsonb not null, processed boolean not null default false, processing_error text, received_at timestamptz not null default now(), processed_at timestamptz, unique(provider,external_event_id));
+
+-- Apply RLS to every exposed application table and add policies in the production migration.
